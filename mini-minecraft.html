@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mini Minecraft 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+}
+
+#ui {
+  position: fixed;
+  bottom: 10px;
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  z-index: 10;
+}
+
+button {
+  font-size: 18px;
+  padding: 18px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(0,0,0,0.7);
+  color: white;
+}
+
+#hotbar {
+  position: fixed;
+  bottom: 80px;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-size: 18px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="hotbar">🗡️ Espada seleccionada</div>
+
+<div id="ui">
+  <button ontouchstart="forward=true" ontouchend="forward=false">⬆️</button>
+  <button ontouchstart="left=true" ontouchend="left=false">⬅️</button>
+  <button ontouchstart="right=true" ontouchend="right=false">➡️</button>
+  <button ontouchstart="attack()">⚔️</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
+<script>
+/* ===== CONFIG ===== */
+const WORLD_SIZE = 40;
+const BLOCK_SIZE = 1;
+const GRAVITY = 0.04;
+/* ================== */
+
+let scene, camera, renderer;
+let playerY = 2;
+let velocityY = 0;
+let forward=false, left=false, right=false;
+let blocks = [];
+let enemies = [];
+
+/* ===== INIT ===== */
+init();
+animate();
+
+function init(){
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+
+  camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+  camera.position.set(0,2,5);
+
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(innerWidth, innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff,0.6));
+
+  const sun = new THREE.DirectionalLight(0xffffff,1);
+  sun.position.set(10,20,10);
+  scene.add(sun);
+
+  generateWorld();
+  spawnEnemy();
+}
+
+/* ===== WORLD ===== */
+function generateWorld(){
+  for(let x=-WORLD_SIZE;x<WORLD_SIZE;x++){
+    for(let z=-WORLD_SIZE;z<WORLD_SIZE;z++){
+      createBlock(x,0,z,0x228B22); // grass
+      createBlock(x,-1,z,0x8B4513); // dirt
+    }
+  }
+}
+
+function createBlock(x,y,z,color){
+  const block = new THREE.Mesh(
+    new THREE.BoxGeometry(1,1,1),
+    new THREE.MeshStandardMaterial({color})
+  );
+  block.position.set(x,y,z);
+  scene.add(block);
+  blocks.push(block);
+}
+
+/* ===== ENEMY ===== */
+function spawnEnemy(){
+  const mob = new THREE.Mesh(
+    new THREE.BoxGeometry(1,2,1),
+    new THREE.MeshStandardMaterial({color:0x00ff00})
+  );
+  mob.position.set(5,1,5);
+  mob.health = 3;
+  scene.add(mob);
+  enemies.push(mob);
+}
+
+/* ===== ATTACK ===== */
+function attack(){
+  enemies.forEach((e,i)=>{
+    const d = camera.position.distanceTo(e.position);
+    if(d < 3){
+      e.health--;
+      if(e.health<=0){
+        scene.remove(e);
+        enemies.splice(i,1);
+      }
+    }
+  });
+}
+
+/* ===== LOOP ===== */
+function animate(){
+  requestAnimationFrame(animate);
+
+  if(forward) camera.position.z -= 0.1;
+  if(left) camera.position.x -= 0.1;
+  if(right) camera.position.x += 0.1;
+
+  velocityY -= GRAVITY;
+  playerY += velocityY;
+
+  if(playerY < 2){
+    playerY = 2;
+    velocityY = 0;
+  }
+
+  camera.position.y = playerY;
+
+  renderer.render(scene,camera);
+}
+
+/* ===== RESIZE ===== */
+window.addEventListener("resize",()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+
+</body>
+</html>
