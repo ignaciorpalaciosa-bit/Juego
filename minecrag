@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Super Minecraft Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; touch-action: none; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; font-family: Arial; text-shadow: 1px 1px 2px black; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="ui">Mundo Generado Aleatoriamente<br>Toca para construir</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: false }); // Optimizado para móvil
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Luces
+        const light = new THREE.DirectionalLight(0xffffff, 1.2);
+        light.position.set(10, 20, 10);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x606060));
+
+        // Materiales
+        const geo = new THREE.BoxGeometry(1, 1, 1);
+        const matPasto = new THREE.MeshLambertMaterial({ color: 0x55aa44 });
+        const matTierra = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+
+        // GENERACIÓN DE MUNDO GRANDE (30x30)
+        const tamano = 15; // Radio del mundo
+        for(let x = -tamano; x < tamano; x++) {
+            for(let z = -tamano; z < tamano; z++) {
+                // Algoritmo simple de altura (ondas de montaña)
+                const altura = Math.floor(Math.sin(x * 0.2) * 2 + Math.cos(z * 0.2) * 2);
+                
+                for(let y = -3; y <= altura; y++) {
+                    const material = (y === altura) ? matPasto : matTierra;
+                    const cube = new THREE.Mesh(geo, material);
+                    cube.position.set(x, y, z);
+                    scene.add(cube);
+                }
+            }
+        }
+
+        camera.position.set(20, 15, 20);
+        camera.lookAt(0, 0, 0);
+
+        // Sistema de construcción mejorado
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('touchstart', (e) => {
+            mouse.x = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.touches[0].clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const voxel = new THREE.Mesh(geo, matPasto);
+                // Coloca el bloque exactamente en la cara tocada
+                voxel.position.copy(hit.point).add(hit.face.normal);
+                voxel.position.floor().addScalar(0.5);
+                scene.add(voxel);
+            }
+        });
+
+        // Controles de cámara (Rotación automática)
+        let angulo = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            angulo += 0.005;
+            camera.position.x = 30 * Math.cos(angulo);
+            camera.position.z = 30 * Math.sin(angulo);
+            camera.lookAt(0, 0, 0);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
