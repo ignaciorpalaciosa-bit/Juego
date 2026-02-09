@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Grok - Versión Espacial de xAI</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #000428, #004e92);
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        canvas {
+            border: 2px solid #ff6b35;
+            box-shadow: 0 0 20px #ff6b35;
+            cursor: pointer;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-size: 18px;
+        }
+        #highscore {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        🚀 Flappy Grok: ¡Impulsa la nave Grok para esquivar los portales xAI!<br>
+        Haz <strong>clic</strong> o presiona <strong>ESPACIO</strong> para volar.<br>
+        ¡Tu récord: <span id="hs">0</span>
+    </div>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div id="highscore" style="display: none;"></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const instructions = document.getElementById('instructions');
+        const highscoreEl = document.getElementById('highscore');
+
+        // Estado del juego
+        let bird = { x: 80, y: 250, vy: 0, angle: 0, r: 18 };
+        let gravity = 0.4;
+        let flapStrength = -9;
+        let pipes = [];
+        let score = 0;
+        let highscore = localStorage.getItem('flappyGrokHighscore') || 0;
+        let gameOver = false;
+        let stars = [];
+
+        // Inicializar estrellas para fondo espacial
+        for (let i = 0; i < 50; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 0.5,
+                speed: Math.random() * 0.5 + 0.2
+            });
+        }
+
+        // Actualizar estrellas
+        function updateStars() {
+            stars.forEach(star => {
+                star.x -= star.speed;
+                if (star.x < 0) {
+                    star.x = canvas.width;
+                    star.y = Math.random() * canvas.height;
+                }
+            });
+        }
+
+        // Dibujar fondo espacial
+        function drawBackground() {
+            // Gradiente espacial
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#000428');
+            gradient.addColorStop(1, '#004e92');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Estrellas
+            ctx.fillStyle = 'white';
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // Dibujar nave Grok (cohete simple)
+        function drawBird() {
+            ctx.save();
+            ctx.translate(bird.x, bird.y);
+            ctx.rotate(bird.angle);
+
+            // Cuerpo del cohete (naranja xAI)
+            ctx.fillStyle = '#ff6b35';
+            ctx.fillRect(-bird.r / 2, -bird.r / 2, bird.r, bird.r * 1.5);
+
+            // Punta del cohete
+            ctx.fillStyle = '#ff9500';
+            ctx.beginPath();
+            ctx.moveTo(0, -bird.r / 2 - 5);
+            ctx.lineTo(-8, 5);
+            ctx.lineTo(8, 5);
+            ctx.fill();
+
+            // Alas
+            ctx.fillStyle = '#ff6b35';
+            ctx.fillRect(-bird.r / 2 - 3, -5, 6, 10);
+            ctx.fillRect(bird.r / 2 - 3, -5, 6, 10);
+
+            // "G" de Grok en el cuerpo
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('G', 0, 3);
+
+            // Llama del motor (si subiendo)
+            if (bird.vy < -2) {
+                ctx.fillStyle = '#ff4757';
+                ctx.beginPath();
+                ctx.moveTo(-4, bird.r / 2 + 2);
+                ctx.lineTo(0, bird.r / 2 + 12);
+                ctx.lineTo(4, bird.r / 2 + 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // Dibujar portales (tuberías estilizadas como portales xAI)
+        function drawPipes() {
+            pipes.forEach(pipe => {
+                // Portal superior
+                ctx.fillStyle = '#00d2d3';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00d2d3';
+                ctx.fillRect(pipe.x, 0, 60, pipe.top);
+                ctx.shadowBlur = 0;
+
+                // Agregar "borde" portal
+                ctx.strokeStyle = '#0099ab';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(pipe.x, 0, 60, pipe.top);
+
+                // Portal inferior
+                ctx.fillStyle = '#00d2d3';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00d2d3';
+                ctx.fillRect(pipe.x, canvas.height - pipe.bottom, 60, pipe.bottom);
+                ctx.shadowBlur = 0;
+
+                ctx.strokeStyle = '#0099ab';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(pipe.x, canvas.height - pipe.bottom, 60, pipe.bottom);
+
+                // Punta del portal
+                ctx.fillStyle = '#007399';
+                ctx.fillRect(pipe.x - 5, pipe.top - 20, 70, 20);
+                ctx.fillRect(pipe.x - 5, canvas.height - pipe.bottom, 70, 20);
+            });
+        }
+
+        // Actualizar lógica del juego
+        function update() {
+            if (gameOver) return;
+
+            // Física del pájaro/nave
+            bird.vy += gravity;
+            bird.y += bird.vy;
+            bird.angle = Math.min(Math.max(bird.vy * 0.06, -0.3), 1.2);
+
+            // Límites pantalla
+            if (bird.y + bird.r > canvas.height - 50 || bird.y - bird.r < 0) {
+                endGame();
+                return;
+            }
+
+            // Generar tuberías/portales
+            if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 250) {
+                const gap = 160;
+                const minHeight = 80;
+                const maxHeight = canvas.height - 200 - gap;
+                const topHeight = Math.random() * (maxHeight - minHeight) + minHeight;
+                pipes.push({
+                    x: canvas.width,
+                    top: topHeight,
+                    bottom: canvas.height - topHeight - gap
+                });
+            }
+
+            // Mover y chequear tuberías
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                pipes[i].x -= 2;
+
+                // Remover tuberías fuera de pantalla
+                if (pipes[i].x + 60 < 0) {
+                    pipes.splice(i, 1);
+                    continue;
+                }
+
+                // Colisión
+                const pipeLeft = pipes[i].x;
+                const pipeRight = pipes[i].x + 60;
+                if (bird.x + bird.r > pipeLeft && bird.x - bird.r < pipeRight) {
+                    if (bird.y - bird.r < pipes[i].top || bird.y + bird.r > canvas.height - pipes[i].bottom) {
+                        endGame();
+                        return;
+                    }
+                }
+
+                // Puntuación
+                if (pipes[i].x + 30 === bird.x) {
+                    score++;
+                }
+            }
+
+            updateStars();
+        }
+
+        // Terminar juego
+        function endGame() {
+            gameOver = true;
+            if (score > highscore) {
+                highscore = score;
+                localStorage.setItem('flappyGrokHighscore', highscore);
+            }
+            highscoreEl.innerHTML = `¡Nuevo récord! ${highscore}`;
+            highscoreEl.style.display = 'block';
+            instructions.innerHTML = `¡Game Over! Puntuación: ${score}<br><br>Haz clic o ESPACIO para reiniciar.`;
+        }
+
+        // Dibujar todo
+        function draw() {
+            drawBackground();
+            drawPipes();
+            drawBird();
+
+            // Puntuación
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(score, 30, 60);
+
+            // Récord
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText(`Récord: ${highscore}`, 20, canvas.height - 30);
+
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ff6b35';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('¡Game Over!', canvas.width / 2, canvas.height / 2 - 20);
+
+                ctx.font = 'bold 24px Arial';
+                ctx.fillStyle = 'white';
+                ctx.fillText(`Puntuación: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.fillText(`Récord: ${highscore}`, canvas.width / 2, canvas.height / 2 + 50);
+            }
+        }
+
+        // Bucle principal
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Controles
+        function flap() {
+            if (gameOver) {
+                // Reiniciar
+                bird = { x: 80, y: 250, vy: 0, angle: 0, r: 18 };
+                pipes = [];
+                score = 0;
+                gameOver = false;
+                highscoreEl.style.display = 'none';
+                instructions.innerHTML = `🚀 Flappy Grok: ¡Impulsa la nave Grok para esquivar los portales xAI!<br>
+                Haz <strong>clic</strong> o presiona <strong>ESPACIO</strong> para volar.<br>
+                ¡Tu récord: <span id="hs">${highscore}</span>`;
+            } else {
+                bird.vy = flapStrength;
+            }
+        }
+
+        // Eventos
+        canvas.addEventListener('click', flap);
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                flap();
+            }
+        });
+
+        // Actualizar highscore inicial
+        document.getElementById('hs').textContent = highscore;
+
+        // Iniciar juego
+        gameLoop();
+    </script>
+</body>
+</html>
